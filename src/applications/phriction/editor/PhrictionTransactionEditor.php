@@ -417,13 +417,26 @@ final class PhrictionTransactionEditor
       foreach ($xactions as $xaction) {
         switch ($xaction->getTransactionType()) {
           case PhrictionTransaction::TYPE_CONTENT:
-            $diff_uri = id(new PhutilURI(
-              '/phriction/diff/'.$object->getID().'/'))
-              ->alter('l', $this->getOldContent()->getVersion())
-              ->alter('r', $this->getNewContent()->getVersion());
-            $body->addLinkSection(
-              pht('DOCUMENT DIFF'),
-              PhabricatorEnv::getProductionURI($diff_uri));
+            $root = dirname(phutil_get_library_root('phabricator'));
+            require_once $root . '/externals/Text/Diff.php';
+            require_once $root . '/externals/Text/Diff/Engine/native.php';
+            require_once $root . '/externals/Text/Diff/Engine/shell.php';
+            require_once $root . '/externals/Text/Diff/Engine/string.php';
+            require_once $root . '/externals/Text/Diff/Engine/xdiff.php';
+            require_once $root . '/externals/Text/Diff/Renderer.php';
+            require_once $root . '/externals/Text/Diff/Renderer/unified.php';
+            $olines   = explode("\n", $this->getOldContent()->getContent());
+            $nlines   = explode("\n", $this->getNewContent()->getContent());
+            $diffset  = new Text_Diff('auto', array($olines, $nlines));
+            $renderer = new Text_Diff_Renderer_unified();
+            $diff     = $renderer->render($diffset);
+            if ( sizeof($diff) > 4096 || sizeof(explode("\n", $diff)) > 256 ) {
+              $diff = PhabricatorEnv::getProductionURI(id(new PhutilURI(
+                '/phriction/diff/'.$object->getID().'/'))
+                ->alter('l', $this->getOldContent()->getVersion())
+                ->alter('r', $this->getNewContent()->getVersion()));
+            }
+            $body->addLinkSection(pht('DOCUMENT DIFF'), $diff);
             break 2;
           default:
             break;
